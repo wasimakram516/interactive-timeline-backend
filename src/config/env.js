@@ -1,4 +1,4 @@
-require("dotenv").config({ path: ".env.local" });
+require('dotenv').config();
 
 // Function to validate required environment variables
 const validateEnv = (key) => {
@@ -20,13 +20,9 @@ const env = {
     accessExpiry: validateEnv("JWT_ACCESS_EXPIRY"),
     refreshExpiry: validateEnv("JWT_REFRESH_EXPIRY"),
   },
-  client: {
-    client_url: validateEnv("CLIENT_URL"),
-  },
   server: {
     port: validateEnv("PORT"),
   },
-  node_env: validateEnv("NODE_ENV"),
   masterKey: validateEnv("MASTER_KEY"),
   cloudinary: {
     cloudName: validateEnv("CLOUDINARY_CLOUD_NAME"),
