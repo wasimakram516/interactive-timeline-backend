@@ -7,13 +7,15 @@ const {
   deleteTimeline,
 } = require("../controllers/timelineController");
 const { protect, adminOnly } = require("../middlewares/authMiddleware");
+const upload = require("../middlewares/uploadMiddleware");
 
 const router = express.Router();
 
-router.post("/", protect, adminOnly, createTimeline);    // Admin Only
-router.get("/", getTimelines);                          // Public (View Timeline)
-router.get("/:id", getTimelineById);                    // Public (View Single Event)
-router.put("/:id", protect, adminOnly, updateTimeline); // Admin Only
-router.delete("/:id", protect, adminOnly, deleteTimeline); // Admin Only
+// ✅ Accept multiple files under field name "files"
+router.post("/", protect, adminOnly, upload.array("files", 5), createTimeline);
+router.get("/", getTimelines);
+router.get("/:id", getTimelineById);
+router.put("/:id", protect, adminOnly, upload.array("files", 5), updateTimeline);
+router.delete("/:id", protect, adminOnly, deleteTimeline);
 
 module.exports = router;
