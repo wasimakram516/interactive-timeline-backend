@@ -15,7 +15,7 @@ exports.setSocketIo = (socketIoInstance) => {
 const emitTimelineUpdate = async () => {
   try {
     if (!io) throw new Error("WebSocket instance (io) is not initialized.");
-    
+
     const timelines = await Timeline.find().sort({ year: 1 });
     io.emit("timelineUpdate", timelines);
   } catch (error) {
@@ -23,49 +23,71 @@ const emitTimelineUpdate = async () => {
   }
 };
 
-// ✅ Create a new timeline event with multiple media
+// ✅ Create a new timeline event
 exports.createTimeline = asyncHandler(async (req, res) => {
-  let { year, description } = req.body;
+  let { year, xPosition, yPosition, description } = req.body;
 
-  if (!year || !description) {
-    return response(res, 400, "Year and description are required.");
+  if (!year || xPosition === undefined || yPosition === undefined) {
+    return response(res, 400, "Year, xPosition, and yPosition are required.");
   }
 
   if (typeof description === "string") {
     try {
       description = JSON.parse(description); // Convert JSON string to array
     } catch (error) {
-      return response(res, 400, "Invalid description format. Must be an array of strings.");
+      return response(
+        res,
+        400,
+        "Invalid description format. Must be an array of strings."
+      );
     }
   }
-  
-  if (!Array.isArray(description)) {
+
+  if (description && !Array.isArray(description)) {
     return response(res, 400, "Description must be an array of strings.");
   }
 
   if (await Timeline.exists({ year })) {
-    return response(res, 400, `A timeline event for the year ${year} already exists.`);
+    return response(
+      res,
+      400,
+      `A timeline event for the year ${year} already exists.`
+    );
   }
 
-  let media = [];
+  let media = null;
+  let infographic = null;
 
-  // ✅ Process multiple media files
-  if (req.files && req.files.length > 0) {
-    const uploadPromises = req.files.map(async (file) => {
-      const uploadedFile = await uploadToCloudinary(file.buffer, file.mimetype);
-      return {
-        url: uploadedFile.secure_url,
-        type: uploadedFile.resource_type,
-      };
-    });
+ // ✅ Process media file (only one allowed)
+if (req.files?.media) {
+  const uploadedFile = await uploadToCloudinary(
+    req.files.media[0].buffer,
+    req.files.media[0].mimetype,
+    "media" // ✅ Pass "media" for media uploads
+  );
+  media = {
+    url: uploadedFile.secure_url,
+    type: uploadedFile.resource_type,
+  };
+}
 
-    media = await Promise.all(uploadPromises);
-  }
+// ✅ Process infographic file (if uploaded)
+if (req.files?.infographic) {
+  const uploadedInfographic = await uploadToCloudinary(
+    req.files.infographic[0].buffer,
+    req.files.infographic[0].mimetype,
+    "infographics" // ✅ Pass "infographic" for infographic uploads
+  );
+  infographic = { url: uploadedInfographic.secure_url };
+}
 
   const timeline = await Timeline.create({
     year,
+    xPosition,
+    yPosition,
     description,
-    media, // ✅ Stores multiple media files
+    media,
+    infographic,
   });
 
   await emitTimelineUpdate(); // ✅ Emit updated timeline data
@@ -73,9 +95,9 @@ exports.createTimeline = asyncHandler(async (req, res) => {
   return response(res, 201, "Timeline event created successfully.", timeline);
 });
 
-// ✅ Update timeline event with multiple media
+// ✅ Update timeline event
 exports.updateTimeline = asyncHandler(async (req, res) => {
-  const { year, description } = req.body;
+  const { year, xPosition, yPosition, description } = req.body;
   const timeline = await Timeline.findById(req.params.id);
 
   if (!timeline) {
@@ -86,31 +108,59 @@ exports.updateTimeline = asyncHandler(async (req, res) => {
     try {
       description = JSON.parse(description); // Convert JSON string to array
     } catch (error) {
-      return response(res, 400, "Invalid description format. Must be an array of strings.");
+      return response(
+        res,
+        400,
+        "Invalid description format. Must be an array of strings."
+      );
     }
   }
-  
 
-  if (req.files && req.files.length > 0) {
-    // ✅ Delete old media before updating
-    for (const mediaItem of timeline.media) {
-      await deleteImage(mediaItem.url);
+  let updatedMedia = timeline.media;
+  let updatedInfographic = timeline.infographic;
+
+  // ✅ Handle media update (if a new file is uploaded)
+  if (req.files?.media) {
+    if (timeline.media?.url && typeof timeline.media.url === "string") {
+      await deleteImage(timeline.media.url);
     }
 
-    // ✅ Upload new media
-    const uploadPromises = req.files.map(async (file) => {
-      const uploadedFile = await uploadToCloudinary(file.buffer, file.mimetype);
-      return {
-        url: uploadedFile.secure_url,
-        type: uploadedFile.resource_type,
-      };
-    });
+    const uploadedFile = await uploadToCloudinary(
+      req.files.media[0].buffer,
+      req.files.media[0].mimetype,
+      "media"
+    );
+    updatedMedia = {
+      url: uploadedFile.secure_url,
+      type: uploadedFile.resource_type,
+    };
+  }
 
-    timeline.media = await Promise.all(uploadPromises);
+  // ✅ Handle infographic update (if a new infographic is uploaded)
+  if (req.files?.infographic) {
+    // ✅ Delete infographic from Cloudinary if exists
+    if (
+      timeline.infographic?.url &&
+      typeof timeline.infographic.url === "string"
+    ) {
+      await deleteImage(timeline.infographic.url);
+    }
+
+    const uploadedInfographic = await uploadToCloudinary(
+      req.files.infographic[0].buffer,
+      req.files.infographic[0].mimetype,
+      "infographics"
+    );
+    updatedInfographic = { url: uploadedInfographic.secure_url };
   }
 
   timeline.year = year ?? timeline.year;
+  timeline.xPosition = xPosition ?? timeline.xPosition;
+  timeline.yPosition = yPosition ?? timeline.yPosition;
   timeline.description = description ?? timeline.description;
+  timeline.media = updatedMedia;
+  timeline.infographic = updatedInfographic;
+
   await timeline.save();
 
   await emitTimelineUpdate(); // ✅ Emit updated timeline data
@@ -123,7 +173,7 @@ exports.getTimelines = asyncHandler(async (req, res) => {
   const timelines = await Timeline.find().sort({ year: 1 });
 
   if (!timelines.length) {
-    return response(res, 404, "No timeline events found.");
+    return response(res, 200, "No timeline events found.");
   }
 
   return response(res, 200, "Timeline events fetched successfully.", timelines);
@@ -146,8 +196,17 @@ exports.deleteTimeline = asyncHandler(async (req, res) => {
     return response(res, 404, "Timeline event not found.");
   }
 
-  if (timeline.media?.url) {
+  // ✅ Delete media from Cloudinary if exists
+  if (timeline.media?.url && typeof timeline.media.url === "string") {
     await deleteImage(timeline.media.url);
+  }
+
+  // ✅ Delete infographic from Cloudinary if exists
+  if (
+    timeline.infographic?.url &&
+    typeof timeline.infographic.url === "string"
+  ) {
+    await deleteImage(timeline.infographic.url);
   }
 
   await timeline.deleteOne();

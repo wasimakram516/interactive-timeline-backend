@@ -9,18 +9,39 @@ cloudinary.config({
 });
 
 /**
- * ✅ Delete Image from Cloudinary
+ * ✅ Delete Image from Cloudinary (Removes version number)
  * @param {string} imageUrl - Full Cloudinary image URL to delete
  */
 const deleteImage = async (imageUrl) => {
   try {
-    if (!imageUrl) return;
+    if (!imageUrl || typeof imageUrl !== "string") {
+      console.warn("⚠️ Skipping Cloudinary deletion. Invalid imageUrl:", imageUrl);
+      return;
+    }
 
     const urlParts = imageUrl.split("/");
-    const fileName = urlParts[urlParts.length - 1].split(".")[0]; // Extract filename
-    const fullFolderPath = urlParts.slice(-3, -1).join("/"); // Extract full folder path (last 3 parts)
+    const uploadIndex = urlParts.indexOf("upload");
 
-    const publicId = `${fullFolderPath}/${fileName}`; // Correct Public ID
+    if (uploadIndex === -1 || uploadIndex + 1 >= urlParts.length) {
+      console.warn("⚠️ Skipping Cloudinary deletion. Could not determine Public ID.");
+      return;
+    }
+
+    // ✅ Extract everything after "upload/" and remove version prefix (vXXXXXXXXXX/)
+    const publicIdWithVersion = urlParts.slice(uploadIndex + 1).join("/");
+    const publicIdParts = publicIdWithVersion.split("/");
+
+    // ✅ If version prefix exists (e.g., "v1739887737/"), remove it
+    if (publicIdParts[0].startsWith("v") && !isNaN(publicIdParts[0].slice(1))) {
+      publicIdParts.shift(); // Remove version prefix
+    }
+
+    const publicId = publicIdParts.join("/").split(".")[0]; // Remove file extension
+
+    if (!publicId) {
+      console.warn("⚠️ Skipping Cloudinary deletion. Could not extract Public ID.");
+      return;
+    }
 
     console.log(`🛑 Deleting image with Public ID: ${publicId}`);
 

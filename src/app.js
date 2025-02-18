@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const timelineRoutes = require("./routes/timelineRoutes");
+const programRoutes = require("./routes/programRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const seedAdmin = require("./seeder/adminSeeder");
 const env = require("./config/env");
@@ -42,6 +43,7 @@ initializeApp();
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/timelines", timelineRoutes);
+app.use("/api/programs", programRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

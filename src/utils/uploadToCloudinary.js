@@ -1,23 +1,33 @@
-
 const env = require("../config/env");
 const { cloudinary } = require("../config/cloudinary");
 
-// ✅ Helper function to upload files manually to Cloudinary
-const uploadToCloudinary = async (fileBuffer, mimetype) => {
-    return new Promise((resolve, reject) => {
-      const resourceType = mimetype.startsWith("video") ? "video" : "image";
-      const folderName = mimetype.startsWith("video") ? "videos" : "images";
-  
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { resource_type: resourceType, folder: `${env.cloudinary.folder}/${folderName}` },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
+/**
+ * ✅ Upload files manually to Cloudinary with dynamic folder structure
+ * @param {Buffer} fileBuffer - The file buffer
+ * @param {string} mimetype - The MIME type of the file
+ * @param {string} type - Either "media" or "infographic"
+ */
+const uploadToCloudinary = async (fileBuffer, mimetype, type) => {
+  return new Promise((resolve, reject) => {
+    const resourceType = mimetype.startsWith("video") ? "video" : "image";
+    const baseFolder = type === "infographics" ? "infographics" : "media";
+    const folderName = mimetype.startsWith("video") ? "videos" : "images";
+
+    console.log(`Uploading file to Cloudinary: ${type}/${folderName}`); // Debugging line
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: resourceType, folder: `${env.cloudinary.folder}/${baseFolder}/${folderName}` },
+      (error, result) => {
+        if (error) {
+          console.error("Cloudinary Upload Error:", error);
+          return reject(error);
         }
-      );
-  
-      uploadStream.end(fileBuffer);
-    });
-  };
-  
-  module.exports = { uploadToCloudinary };
+        resolve(result);
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+};
+
+module.exports = { uploadToCloudinary };

@@ -1,11 +1,11 @@
 const express = require("express");
 const {
-  createTimeline,
-  getTimelines,
-  getTimelineById,
-  updateTimeline,
-  deleteTimeline,
-} = require("../controllers/timelineController");
+  createProgram,
+  getPrograms,
+  getProgramById,
+  updateProgram,
+  deleteProgram,
+} = require("../controllers/programController");
 const { protect, adminOnly } = require("../middlewares/authMiddleware");
 const upload = require("../middlewares/uploadMiddleware");
 
@@ -17,17 +17,17 @@ router.post(
   protect,
   adminOnly,
   upload.fields([{ name: "media", maxCount: 1 }, { name: "infographic", maxCount: 1 }]),
-  createTimeline
+  createProgram
 );
-router.get("/", getTimelines);
-router.get("/:id", getTimelineById);
+router.get("/", getPrograms);
+router.get("/:id", getProgramById);
 router.put(
   "/:id",
   protect,
   adminOnly,
   upload.fields([{ name: "media", maxCount: 1 }, { name: "infographic", maxCount: 1 }]),
-  updateTimeline
+  updateProgram
 );
-router.delete("/:id", protect, adminOnly, deleteTimeline);
+router.delete("/:id", protect, adminOnly, deleteProgram);
 
 module.exports = router;

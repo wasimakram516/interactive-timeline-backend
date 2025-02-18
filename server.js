@@ -4,6 +4,7 @@ const app = require("./src/app");
 const env = require("./src/config/env");
 const socketHandler = require("./src/socket/socketEvents");
 const timelineController = require("./src/controllers/timelineController"); // Import controller
+const programController = require("./src/controllers/programController"); // Import controller
 
 const PORT = env.server.port;
 
@@ -19,7 +20,8 @@ const io = new Server(server, {
 socketHandler(io);
 
 // ✅ Pass `io` to controllers that need real-time updates
-timelineController.setSocketIo(io); // Ensure `timelineController` has `io`
+timelineController.setSocketIo(io);
+programController.setSocketIo(io);
 
 // ✅ Export `server` and `io`
 module.exports = { server, io };
