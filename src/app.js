@@ -45,6 +45,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/timelines", timelineRoutes);
 app.use("/api/programs", programRoutes);
 
+// Health checking route
+app.get("/", (req, res) => {
+  console.log("Timeline Server is running...");
+  res.status(200).send("OK");
+});
+
 // Global Error Handler
 app.use(errorHandler);
 
