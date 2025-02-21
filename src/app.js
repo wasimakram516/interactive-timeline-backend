@@ -42,8 +42,8 @@ initializeApp();
 
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/timelines", timelineRoutes);
-app.use("/api/programs", programRoutes);
+app.use("/api/timeline", timelineRoutes);
+app.use("/api/program", programRoutes);
 
 // Health checking route
 app.get("/", (req, res) => {

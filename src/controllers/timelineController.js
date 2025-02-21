@@ -4,18 +4,17 @@ const { deleteImage } = require("../config/cloudinary");
 const { uploadToCloudinary } = require("../utils/uploadToCloudinary");
 const asyncHandler = require("../middlewares/asyncHandler");
 
-let io; // ✅ Declare `io` globally but initialize it later
+let io;
 
-// ✅ Function to initialize WebSocket (called from server.js)
+// ✅ Initialize WebSocket
 exports.setSocketIo = (socketIoInstance) => {
   io = socketIoInstance;
 };
 
-// ✅ Function to emit updated timeline data
+// ✅ Emit updated timeline data
 const emitTimelineUpdate = async () => {
   try {
     if (!io) throw new Error("WebSocket instance (io) is not initialized.");
-
     const timelines = await Timeline.find().sort({ year: 1 });
     io.emit("timelineUpdate", timelines);
   } catch (error) {
@@ -23,160 +22,18 @@ const emitTimelineUpdate = async () => {
   }
 };
 
-// ✅ Create a new timeline event
-exports.createTimeline = asyncHandler(async (req, res) => {
-  let { year, xPosition, yPosition, description } = req.body;
-
-  if (!year || xPosition === undefined || yPosition === undefined) {
-    return response(res, 400, "Year, xPosition, and yPosition are required.");
-  }
-
-  if (typeof description === "string") {
-    try {
-      description = JSON.parse(description); // Convert JSON string to array
-    } catch (error) {
-      return response(
-        res,
-        400,
-        "Invalid description format. Must be an array of strings."
-      );
-    }
-  }
-
-  if (description && !Array.isArray(description)) {
-    return response(res, 400, "Description must be an array of strings.");
-  }
-
-  if (await Timeline.exists({ year })) {
-    return response(
-      res,
-      400,
-      `A timeline event for the year ${year} already exists.`
-    );
-  }
-
-  let media = null;
-  let infographic = null;
-
- // ✅ Process media file (only one allowed)
-if (req.files?.media) {
-  const uploadedFile = await uploadToCloudinary(
-    req.files.media[0].buffer,
-    req.files.media[0].mimetype,
-    "media" // ✅ Pass "media" for media uploads
-  );
-  media = {
-    url: uploadedFile.secure_url,
-    type: uploadedFile.resource_type,
-  };
-}
-
-// ✅ Process infographic file (if uploaded)
-if (req.files?.infographic) {
-  const uploadedInfographic = await uploadToCloudinary(
-    req.files.infographic[0].buffer,
-    req.files.infographic[0].mimetype,
-    "infographics" // ✅ Pass "infographic" for infographic uploads
-  );
-  infographic = { url: uploadedInfographic.secure_url };
-}
-
-  const timeline = await Timeline.create({
-    year,
-    xPosition,
-    yPosition,
-    description,
-    media,
-    infographic,
-  });
-
-  await emitTimelineUpdate(); // ✅ Emit updated timeline data
-
-  return response(res, 201, "Timeline event created successfully.", timeline);
-});
-
-// ✅ Update timeline event
-exports.updateTimeline = asyncHandler(async (req, res) => {
-  const { year, xPosition, yPosition, description } = req.body;
-  const timeline = await Timeline.findById(req.params.id);
-
-  if (!timeline) {
-    return response(res, 404, "Timeline event not found.");
-  }
-
-  if (typeof description === "string") {
-    try {
-      description = JSON.parse(description); // Convert JSON string to array
-    } catch (error) {
-      return response(
-        res,
-        400,
-        "Invalid description format. Must be an array of strings."
-      );
-    }
-  }
-
-  let updatedMedia = timeline.media;
-  let updatedInfographic = timeline.infographic;
-
-  // ✅ Handle media update (if a new file is uploaded)
-  if (req.files?.media) {
-    if (timeline.media?.url && typeof timeline.media.url === "string") {
-      await deleteImage(timeline.media.url);
-    }
-
-    const uploadedFile = await uploadToCloudinary(
-      req.files.media[0].buffer,
-      req.files.media[0].mimetype,
-      "media"
-    );
-    updatedMedia = {
-      url: uploadedFile.secure_url,
-      type: uploadedFile.resource_type,
-    };
-  }
-
-  // ✅ Handle infographic update (if a new infographic is uploaded)
-  if (req.files?.infographic) {
-    // ✅ Delete infographic from Cloudinary if exists
-    if (
-      timeline.infographic?.url &&
-      typeof timeline.infographic.url === "string"
-    ) {
-      await deleteImage(timeline.infographic.url);
-    }
-
-    const uploadedInfographic = await uploadToCloudinary(
-      req.files.infographic[0].buffer,
-      req.files.infographic[0].mimetype,
-      "infographics"
-    );
-    updatedInfographic = { url: uploadedInfographic.secure_url };
-  }
-
-  timeline.year = year ?? timeline.year;
-  timeline.xPosition = xPosition ?? timeline.xPosition;
-  timeline.yPosition = yPosition ?? timeline.yPosition;
-  timeline.description = description ?? timeline.description;
-  timeline.media = updatedMedia;
-  timeline.infographic = updatedInfographic;
-
-  await timeline.save();
-
-  await emitTimelineUpdate(); // ✅ Emit updated timeline data
-
-  return response(res, 200, "Timeline event updated successfully.", timeline);
-});
-
-// ✅ Get all timeline events
+// ✅ Get all timeline events (Handles Empty Case)
 exports.getTimelines = asyncHandler(async (req, res) => {
   const timelines = await Timeline.find().sort({ year: 1 });
 
-  if (!timelines.length) {
-    return response(res, 200, "No timeline events found.");
-  }
-
-  return response(res, 200, "Timeline events fetched successfully.", timelines);
+  return response(
+    res,
+    200,
+    timelines.length
+      ? "Timeline events fetched successfully."
+      : "No timeline events found.",
+    timelines
+  );
 });
 
 // ✅ Get a single timeline event
@@ -189,29 +46,359 @@ exports.getTimelineById = asyncHandler(async (req, res) => {
   return response(res, 200, "Timeline event retrieved successfully.", timeline);
 });
 
-// ✅ Delete a timeline event
+// ✅ Create a new timeline year (without entries)
+exports.createTimeline = asyncHandler(async (req, res) => {
+  let { year, xPosition, yPosition } = req.body;
+
+  if (!year || xPosition === undefined || yPosition === undefined) {
+    return response(res, 400, "Year, xPosition, and yPosition are required.");
+  }
+
+  if (await Timeline.exists({ year })) {
+    return response(
+      res,
+      400,
+      `A timeline event for the year ${year} already exists.`
+    );
+  }
+
+  const timeline = await Timeline.create({
+    year,
+    xPosition,
+    yPosition,
+    entries: [],
+  });
+  await emitTimelineUpdate();
+  return response(res, 201, "Timeline year created successfully.", timeline);
+});
+
+// ✅ Update timeline year (year, xPosition, yPosition)
+exports.updateTimelineYear = asyncHandler(async (req, res) => {
+  const { year, xPosition, yPosition } = req.body;
+  const timeline = await Timeline.findById(req.params.id);
+
+  if (!timeline) {
+    return response(res, 404, "Timeline year not found.");
+  }
+
+  if (year !== undefined) timeline.year = year;
+  if (xPosition !== undefined) timeline.xPosition = xPosition;
+  if (yPosition !== undefined) timeline.yPosition = yPosition;
+
+  await timeline.save();
+  await emitTimelineUpdate();
+  return response(res, 200, "Timeline year updated successfully.", timeline);
+});
+
+// ✅ Delete an entire timeline year (removes all entries)
 exports.deleteTimeline = asyncHandler(async (req, res) => {
   const timeline = await Timeline.findById(req.params.id);
   if (!timeline) {
-    return response(res, 404, "Timeline event not found.");
+    return response(res, 404, "Timeline year not found.");
   }
 
-  // ✅ Delete media from Cloudinary if exists
-  if (timeline.media?.url && typeof timeline.media.url === "string") {
-    await deleteImage(timeline.media.url);
-  }
-
-  // ✅ Delete infographic from Cloudinary if exists
-  if (
-    timeline.infographic?.url &&
-    typeof timeline.infographic.url === "string"
-  ) {
-    await deleteImage(timeline.infographic.url);
+  // ✅ Delete all media & infographics before removing the timeline event
+  for (const entry of timeline.entries) {
+    for (const media of entry.media) {
+      await deleteImage(media.url);
+    }
+    for (const infographic of entry.infographics) {
+      await deleteImage(infographic.url);
+    }
   }
 
   await timeline.deleteOne();
+  await emitTimelineUpdate();
+  return response(res, 200, "Timeline year deleted successfully.");
+});
 
-  await emitTimelineUpdate(); // ✅ Emit updated timeline data
+// ✅ Add an entry to an existing year
+exports.addEntryToTimeline = asyncHandler(async (req, res) => {
+  const timeline = await Timeline.findById(req.params.id);
+  if (!timeline) {
+    return response(res, 404, "Timeline year not found.");
+  }
 
-  return response(res, 200, "Timeline event deleted successfully.");
+  let {
+    title,
+    description,
+    xPosition,
+    yPosition,
+    mediaXPositions,
+    mediaYPositions,
+    infographicXPositions,
+    infographicYPositions,
+  } = req.body;
+
+  if (!title || xPosition === undefined || yPosition === undefined) {
+    return response(
+      res,
+      400,
+      "Entry must have a title, xPosition, and yPosition."
+    );
+  }
+
+  try {
+    description = JSON.parse(description);
+  } catch (error) {
+    return response(res, 400, "Invalid description format");
+  }
+  
+  // Validate it's an array of non-empty strings
+  if (!Array.isArray(description) || description.length === 0) {
+    return response(res, 400, "Description must be a non-empty array");
+  }
+
+  let media = [];
+  let infographics = [];
+
+  if (req.files?.media) {
+    if (
+      !Array.isArray(mediaXPositions) ||
+      !Array.isArray(mediaYPositions) ||
+      mediaXPositions.length !== req.files.media.length
+    ) {
+      return response(
+        res,
+        400,
+        "Each media file must have corresponding xPosition and yPosition."
+      );
+    }
+
+    for (let index = 0; index < req.files.media.length; index++) {
+      const file = req.files.media[index];
+      const uploadedFile = await uploadToCloudinary(
+        file.buffer,
+        file.mimetype,
+        "media"
+      );
+      media.push({
+        url: uploadedFile.secure_url,
+        mediaType: uploadedFile.resource_type, // Renamed from `type` to `mediaType`
+        xPosition: mediaXPositions[index],
+        yPosition: mediaYPositions[index],
+      });
+    }
+  }
+
+  if (req.files?.infographic) {
+    if (
+      !Array.isArray(infographicXPositions) ||
+      !Array.isArray(infographicYPositions) ||
+      infographicXPositions.length !== req.files.infographic.length
+    ) {
+      return response(
+        res,
+        400,
+        "Each infographic must have corresponding xPosition and yPosition."
+      );
+    }
+
+    for (let index = 0; index < req.files.infographic.length; index++) {
+      const file = req.files.infographic[index];
+      const uploadedInfographic = await uploadToCloudinary(
+        file.buffer,
+        file.mimetype,
+        "infographics"
+      );
+      infographics.push({
+        url: uploadedInfographic.secure_url,
+        xPosition: infographicXPositions[index],
+        yPosition: infographicYPositions[index],
+      });
+    }
+  }
+
+  const newEntry = {
+    title,
+    description,
+    xPosition,
+    yPosition,
+    media,
+    infographics,
+  };
+  timeline.entries.push(newEntry);
+  await timeline.save();
+  await emitTimelineUpdate();
+  return response(res, 201, "Entry added successfully.", timeline);
+});
+
+// ✅ Update entry in a timeline using entry ID
+exports.updateEntryInTimeline = asyncHandler(async (req, res) => {
+  let {
+    title,
+    description,
+    xPosition,
+    yPosition,
+    mediaXPositions,
+    mediaYPositions,
+    infographicXPositions,
+    infographicYPositions,
+  } = req.body;
+
+  const timeline = await Timeline.findById(req.params.id);
+  if (!timeline) {
+    return response(res, 404, "Timeline year not found.");
+  }
+
+  const entry = timeline.entries.id(req.params.entryId);
+  if (!entry) {
+    return response(res, 404, "Entry not found.");
+  }
+
+  if (title){
+    entry.title = title;
+  }
+  
+  if (description) {
+    try {
+      description = JSON.parse(description); // Parse JSON string to array
+    } catch (error) {
+      return response(res, 400, "Invalid description format");
+    }
+
+    // Validate it's an array of non-empty strings
+    if (!Array.isArray(description) || description.length === 0) {
+      return response(res, 400, "Description must be a non-empty array");
+    }
+
+    // Trim and filter empty lines
+    entry.description = description
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }
+
+  // Update entry position (if provided)
+  if (xPosition !== undefined) entry.xPosition = xPosition;
+  if (yPosition !== undefined) entry.yPosition = yPosition;
+
+  // ✅ Update Media Positions (if no new files are provided)
+  if (!req.files?.media && mediaXPositions && mediaYPositions) {
+    if (
+      Array.isArray(mediaXPositions) &&
+      Array.isArray(mediaYPositions) &&
+      mediaXPositions.length === entry.media.length &&
+      mediaYPositions.length === entry.media.length
+    ) {
+      entry.media.forEach((media, index) => {
+        media.xPosition = Number(mediaXPositions[index]);
+        media.yPosition = Number(mediaYPositions[index]);
+      });
+    } else {
+      return response(res, 400, "Invalid media positions provided.");
+    }
+  }
+
+  // ✅ Update Infographic Positions (if no new files are provided)
+  if (!req.files?.infographic && infographicXPositions && infographicYPositions) {
+    if (
+      Array.isArray(infographicXPositions) &&
+      Array.isArray(infographicYPositions) &&
+      infographicXPositions.length === entry.infographics.length &&
+      infographicYPositions.length === entry.infographics.length
+    ) {
+      entry.infographics.forEach((infographic, index) => {
+        infographic.xPosition = Number(infographicXPositions[index]);
+        infographic.yPosition = Number(infographicYPositions[index]);
+      });
+    } else {
+      return response(res, 400, "Invalid infographic positions provided.");
+    }
+  }
+
+  // ✅ Handle New Media Files (if provided)
+  if (req.files?.media) {
+    // Delete old media
+    for (const media of entry.media) {
+      await deleteImage(media.url);
+    }
+
+    // Clear existing media
+    entry.media = [];
+
+    // Check if positions are provided correctly
+    if (
+      !Array.isArray(mediaXPositions) ||
+      !Array.isArray(mediaYPositions) ||
+      mediaXPositions.length !== req.files.media.length ||
+      mediaYPositions.length !== req.files.media.length
+    ) {
+      return response(res, 400, "Each media file must have a corresponding xPosition and yPosition.");
+    }
+
+    // Upload new media and assign positions
+    for (let index = 0; index < req.files.media.length; index++) {
+      const file = req.files.media[index];
+      const uploadedFile = await uploadToCloudinary(file.buffer, file.mimetype, "media");
+
+      entry.media.push({
+        url: uploadedFile.secure_url,
+        mediaType: uploadedFile.resource_type,
+        xPosition: Number(mediaXPositions[index]),
+        yPosition: Number(mediaYPositions[index]),
+      });
+    }
+  }
+
+  // ✅ Handle New Infographic Files (if provided)
+  if (req.files?.infographic) {
+    // Delete old infographics
+    for (const infographic of entry.infographics) {
+      await deleteImage(infographic.url);
+    }
+
+    // Clear existing infographics
+    entry.infographics = [];
+
+    // Check if positions are provided correctly
+    if (
+      !Array.isArray(infographicXPositions) ||
+      !Array.isArray(infographicYPositions) ||
+      infographicXPositions.length !== req.files.infographic.length ||
+      infographicYPositions.length !== req.files.infographic.length
+    ) {
+      return response(res, 400, "Each infographic must have a corresponding xPosition and yPosition.");
+    }
+
+    // Upload new infographics and assign positions
+    for (let index = 0; index < req.files.infographic.length; index++) {
+      const file = req.files.infographic[index];
+      const uploadedInfographic = await uploadToCloudinary(file.buffer, file.mimetype, "infographics");
+
+      entry.infographics.push({
+        url: uploadedInfographic.secure_url,
+        xPosition: Number(infographicXPositions[index]),
+        yPosition: Number(infographicYPositions[index]),
+      });
+    }
+  }
+
+  await timeline.save();
+  await emitTimelineUpdate();
+  return response(res, 200, "Entry updated successfully.", timeline);
+});
+
+// ✅ Delete a specific entry using entry ID
+exports.deleteEntryFromTimeline = asyncHandler(async (req, res) => {
+  const timeline = await Timeline.findById(req.params.id);
+  if (!timeline) {
+    return response(res, 404, "Timeline year not found.");
+  }
+
+  const entry = timeline.entries.id(req.params.entryId);
+  if (!entry) {
+    return response(res, 404, "Entry not found.");
+  }
+
+  for (const media of entry.media) {
+    await deleteImage(media.url);
+  }
+  for (const infographic of entry.infographics) {
+    await deleteImage(infographic.url);
+  }
+
+  timeline.entries.pull(req.params.entryId); 
+  await timeline.save();
+  await emitTimelineUpdate();
+  return response(res, 200, "Entry deleted successfully.", timeline);
 });
