@@ -126,7 +126,7 @@ exports.addEntryToProgram = asyncHandler(async (req, res) => {
 
   // ✅ Parse description only if it has a valid value
   let parsedDescription = [];
-  if (description && description !== "[]") {
+  if (description !== undefined && description !== null && description !== "null") {
     try {
       parsedDescription = JSON.parse(description);
       if (!Array.isArray(parsedDescription)) {
