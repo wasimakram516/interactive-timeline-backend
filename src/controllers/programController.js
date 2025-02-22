@@ -114,39 +114,33 @@ exports.addEntryToProgram = asyncHandler(async (req, res) => {
   }
 
   let {
-    title,
-    description,
-    xPosition,
-    yPosition,
+    title = "", // ✅ Default to empty string if not provided
+    description = "[]", // ✅ Default to empty array in string format
+    xPosition = 0, // ✅ Default to 0 if not provided
+    yPosition = 0,
     mediaXPositions,
     mediaYPositions,
     infographicXPositions,
     infographicYPositions,
   } = req.body;
 
-  if (!title || xPosition === undefined || yPosition === undefined) {
-    return response(
-      res,
-      400,
-      "Entry must have a title, xPosition, and yPosition."
-    );
-  }
-
-  
-  try {
-    description = JSON.parse(description);
-  } catch (error) {
-    return response(res, 400, "Invalid description format");
-  }
-  
-  // Validate it's an array of non-empty strings
-  if (!Array.isArray(description) || description.length === 0) {
-    return response(res, 400, "Description must be a non-empty array");
+  // ✅ Parse description only if it has a valid value
+  let parsedDescription = [];
+  if (description && description !== "[]") {
+    try {
+      parsedDescription = JSON.parse(description);
+      if (!Array.isArray(parsedDescription)) {
+        return response(res, 400, "Description must be an array.");
+      }
+    } catch (error) {
+      return response(res, 400, "Invalid description format.");
+    }
   }
 
   let media = [];
   let infographics = [];
 
+  // ✅ Handle Media Upload
   if (req.files?.media) {
     if (
       !Array.isArray(mediaXPositions) ||
@@ -176,6 +170,7 @@ exports.addEntryToProgram = asyncHandler(async (req, res) => {
     }
   }
 
+  // ✅ Handle Infographics Upload
   if (req.files?.infographic) {
     if (
       !Array.isArray(infographicXPositions) ||
@@ -205,13 +200,14 @@ exports.addEntryToProgram = asyncHandler(async (req, res) => {
   }
 
   const newEntry = {
-    title,
-    description,
+    title, // ✅ Now optional
+    description: parsedDescription, // ✅ Now optional
     xPosition,
     yPosition,
     media,
     infographics,
   };
+  
   program.entries.push(newEntry);
   await program.save();
   await emitProgramUpdate();
@@ -241,31 +237,46 @@ exports.updateEntryInProgram = asyncHandler(async (req, res) => {
     return response(res, 404, "Entry not found.");
   }
 
-  if (title){
+  if (title) {
     entry.title = title;
   }
 
-  if (description) {
-    try {
-      description = JSON.parse(description); // Parse JSON string to array
-    } catch (error) {
-      return response(res, 400, "Invalid description format");
+  console.log("Description", description);
+
+  if (description !== undefined && description !== null && description !== "null") {
+    console.log("checking description...");
+
+    if (typeof description === "string") {
+      try {
+        description = JSON.parse(description); // Ensure it's an array
+      } catch (error) {
+        return response(res, 400, "Invalid description format");
+      }
     }
 
-    // Validate it's an array of non-empty strings
-    if (!Array.isArray(description) || description.length === 0) {
-      return response(res, 400, "Description must be a non-empty array");
+    if (!Array.isArray(description)) {
+      return response(res, 400, "Description must be an array.");
     }
 
     // Trim and filter empty lines
     entry.description = description
-      .map((line) => line.trim())
+      .map((line) => (typeof line === "string" ? line.trim() : ""))
       .filter((line) => line.length > 0);
+
+    if (entry.description.length === 0) {
+      entry.description = []; // Ensure it's an empty array if no valid content
+    }
+  } else {
+    console.log("Skipping description update");
   }
 
   // Update entry position (if provided)
-  if (xPosition !== undefined) entry.xPosition = xPosition;
-  if (yPosition !== undefined) entry.yPosition = yPosition;
+  if (xPosition !== undefined) {
+    entry.xPosition = xPosition === "null" ? null : Number(xPosition);
+  }
+  if (yPosition !== undefined) {
+    entry.yPosition = yPosition === "null" ? null : Number(yPosition);
+  }
 
   // ✅ Update Media Positions (if no new files are provided)
   if (!req.files?.media && mediaXPositions && mediaYPositions) {

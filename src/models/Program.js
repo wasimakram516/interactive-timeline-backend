@@ -20,19 +20,16 @@ const ProgramSchema = new mongoose.Schema(
       {
         title: {
           type: String,
-          required: true,
         },
         description: {
           type: [String], // Supports both string and array formats
-          default: undefined, // Allows single or multiple descriptions
+          default: [],
         },
         xPosition: {
           type: Number, // Entry-level horizontal position (0 - 100)
-          required: true,
         },
         yPosition: {
           type: Number, // Entry-level vertical position (0 - 100)
-          required: true,
         },
         media: [
           {
