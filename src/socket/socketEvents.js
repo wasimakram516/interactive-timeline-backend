@@ -31,24 +31,41 @@ const socketHandler = (io) => {
       console.log(`👤 Client ${socket.id} registered as ${role}`);
     });
 
-    
     // ✅ Handle year selection for timeline
     socket.on("selectYear", async (year) => {
       console.log(`📅 Year selected: ${year}`);
+
+      if (year === null) {
+        // Emit null to unselect the year
+        io.emit("animateYear", null);
+        return;
+      }
+
       const eventData = await Timeline.findOne({ year });
 
       if (eventData) {
         io.emit("animateYear", eventData); // Send selected year to all screens
+      } else {
+        console.log(`❌ Year ${year} not found in the database`);
       }
     });
 
     // ✅ Handle program title selection
     socket.on("selectProgram", async (title) => {
       console.log(`📜 Program selected: ${title}`);
+
+      if (title === null) {
+        // Emit null to unselect the title
+        io.emit("animateProgram", null);
+        return;
+      }
+
       const programData = await Program.findOne({ title });
 
       if (programData) {
         io.emit("animateProgram", programData); // Send selected program to all screens
+      } else {
+        console.log(`❌ Title ${title} not found in the database`);
       }
     });
 
