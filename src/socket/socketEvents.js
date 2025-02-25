@@ -35,18 +35,19 @@ const socketHandler = (io) => {
     socket.on("selectYear", async (year) => {
       console.log(`📅 Year selected: ${year}`);
 
+      // Broadcast the selected year to ALL controllers
+      io.emit("yearSelected", year);
+
       if (year === null) {
-        // Emit null to unselect the year
-        io.emit("animateYear", null);
+        io.emit("animateYear", null); // For big screens
         return;
       }
 
       const eventData = await Timeline.findOne({ year });
-
       if (eventData) {
-        io.emit("animateYear", eventData); // Send selected year to all screens
+        io.emit("animateYear", eventData); // For big screens
       } else {
-        console.log(`❌ Year ${year} not found in the database`);
+        console.log(`❌ Year ${year} not found`);
       }
     });
 
